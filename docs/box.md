@@ -2,7 +2,34 @@
 
 The Linux VM behind a Grok Bot is the **box**. On a typical tailnet it is reachable as host `grokbot-box` (or `<host>.<tailnet>.ts.net`). Outside agents should SSH there directly. The gateway does not proxy a shell.
 
-## One-time on a device that can already log into the box
+## Grok Bot VMs (no systemd, no sshd)
+
+A desktop Grok Bot's VM is a container. PID 1 is the Grok Bot pod daemon, so there is no systemd, no cron and no sshd. Install Tailscale in userspace as `box` and use Tailscale SSH instead of an SSH server. Ask a bot to run these (it shows Allow/Deny cards):
+
+```sh
+mkdir -p ~/.local/tailscale ~/.local/share/tailscale
+# Tarball name for this arch: curl -fsSL 'https://pkgs.tailscale.com/stable/?mode=json' (Tarballs field)
+curl -fsSL https://pkgs.tailscale.com/stable/<tarball> | tar xz -C ~/.local/tailscale --strip-components=1
+nohup ~/.local/tailscale/tailscaled --tun=userspace-networking \
+  --statedir=$HOME/.local/share/tailscale \
+  --socket=$HOME/.local/share/tailscale/tailscaled.sock \
+  > ~/.local/share/tailscale/tailscaled.log 2>&1 &
+~/.local/tailscale/tailscale --socket=$HOME/.local/share/tailscale/tailscaled.sock up --ssh --hostname=grokbot-box
+```
+
+Open the printed login URL and approve the device. If an old offline `grokbot-box` is still on the tailnet, remove it first or the new one becomes `grokbot-box-1`.
+
+Nothing restarts `tailscaled` after the VM restarts. Add a small `~/.local/bin/grokbot-tailscale-ensure` that starts `tailscaled` (same flags) when `pgrep -u "$(id -u)" -x tailscaled` finds nothing, and call it from the top of `~/.bashrc`. Login state lives in `~/.local/share/tailscale`, so it rejoins without another login.
+
+Then connect from any tailnet device with no key setup:
+
+```fish
+ssh box@grokbot-box
+```
+
+The default tailnet policy uses Tailscale SSH `check` mode, which asks for a browser login every 12 hours or so. Switch the `ssh` rule to `"action": "accept"` if agents need to connect without that check.
+
+## One-time on a device that can already log into the box (sshd boxes)
 
 ```fish
 ./scripts/box-ssh-setup.sh

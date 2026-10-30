@@ -57,7 +57,7 @@ Do not invent tools named `send_email`, `purchase`, or `delete_*`. The gateway w
 ssh -i ~/.config/grokbot-gateway/ssh/<your-agent-name>_ed25519 -o IdentitiesOnly=yes box@grokbot-box
 ```
 
-If a config Host entry already exists, `ssh grokbot-box` is enough. See `docs/box.md`. Use `<host>.<tailnet>.ts.net` if MagicDNS needs the full name.
+If the box runs Tailscale SSH (Grok Bot VMs do), `ssh box@grokbot-box` is enough, with no key. If a config Host entry already exists, `ssh grokbot-box` is enough. See `docs/box.md`. Use `<host>.<tailnet>.ts.net` if MagicDNS needs the full name.
 
 Use SSH for files and processes on the VM. Use the CLI/MCP for chatting with bots. Do not open box port 1340 to the public internet.
 
