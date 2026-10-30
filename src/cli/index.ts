@@ -1,5 +1,7 @@
 import fs from "node:fs";
+import os from "node:os";
 import { Command } from "commander";
+import { boxList, boxReadFile } from "../box.js";
 import { GrokBotClient } from "../client/index.js";
 import { writeDefaultConfig } from "../config.js";
 import { gatewayStatus, runDoctor } from "../doctor.js";
@@ -44,6 +46,15 @@ function readMessage(raw: string[], file?: string): string {
     return fs.readFileSync(file, "utf8");
   }
   return raw.join(" ").trim();
+}
+
+// An unquoted ~/x on the command line arrives already expanded to the Mac's
+// home, which never exists on the Linux box. Map it back to the box home.
+function boxPathArg(raw: string): string {
+  const home = os.homedir();
+  if (raw === home) return "~";
+  if (raw.startsWith(home + "/")) return "~/" + raw.slice(home.length + 1);
+  return raw;
 }
 
 export function buildProgram(): Command {
@@ -310,6 +321,59 @@ A gateway token or stdio MCP process can message your bots as you.`
           printHuman(lines);
         }
         if (!result.ok) process.exitCode = 1;
+      } catch (err) {
+        fail(err, json);
+      }
+    });
+
+  const box = program
+    .command("box")
+    .description("Read files on the Grok Bot's Linux VM over Tailscale SSH (read-only)")
+    .addHelpText("after", "\nExamples:\n  grokbot box ls\n  grokbot box ls ~/workspace --json\n  grokbot box cat ~/workspace/README.md");
+
+  box
+    .command("ls")
+    .description("List a directory on the box")
+    .argument("[path]", "Directory: absolute, ~/..., or relative to the box home", "~")
+    .addHelpText("after", "\nExamples:\n  grokbot box ls\n  grokbot box ls /etc --json")
+    .action(async function (this: Command, path: string) {
+      const json = jsonFlag(this);
+      try {
+        assertAllowedAction("box_list");
+        const listing = await boxList(boxPathArg(path));
+        audit(localActor(), "box_list", { ok: true, extra: { path: listing.path, count: listing.entries.length } });
+        if (json) printJson({ ok: true, ...listing });
+        else {
+          printHuman([
+            `${listing.host}:${listing.path}`,
+            ...listing.entries.map((e) => `${e.type === "dir" ? "d" : e.type === "link" ? "l" : "-"} ${String(e.size).padStart(10)}  ${e.name}${e.type === "dir" ? "/" : ""}`),
+            ...(listing.truncated ? ["(truncated)"] : [])
+          ]);
+        }
+      } catch (err) {
+        fail(err, json);
+      }
+    });
+
+  box
+    .command("cat")
+    .description("Print a file on the box")
+    .argument("<path>", "File: absolute, ~/..., or relative to the box home")
+    .option("--max-bytes <n>", "Bytes to read from the start of the file (max 1048576)", "262144")
+    .addHelpText("after", "\nExamples:\n  grokbot box cat ~/workspace/notes.md\n  grokbot box cat /etc/os-release --json")
+    .action(async function (this: Command, path: string) {
+      const json = jsonFlag(this);
+      try {
+        assertAllowedAction("box_read_file");
+        const maxBytes = positiveNumber(this.opts().maxBytes, "--max-bytes", { integer: true, max: 1_048_576 });
+        const file = await boxReadFile(boxPathArg(path), maxBytes);
+        audit(localActor(), "box_read_file", { ok: true, extra: { path: file.path, size: file.size } });
+        if (json) printJson({ ok: true, ...file });
+        else if (file.binary) printHuman([`${file.path}: binary file, ${file.size} bytes`]);
+        else {
+          process.stdout.write(file.text ?? "");
+          if (file.truncated) process.stderr.write(`\n(truncated: showed ${maxBytes} of ${file.size} bytes)\n`);
+        }
       } catch (err) {
         fail(err, json);
       }

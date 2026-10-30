@@ -1,59 +1,41 @@
-# Box SSH over Tailscale
+# The box (Grok Bot's Linux VM)
 
-The Linux VM behind a Grok Bot is the **box**. On a typical tailnet it is reachable as host `grokbot-box` (or `<host>.<tailnet>.ts.net`). Outside agents should SSH there directly. The gateway does not proxy a shell.
+The Linux VM behind a Grok Bot is the **box**. Outside agents reach it over your Tailscale tailnet as `grokbot-box` (or `<host>.<tailnet>.ts.net`):
 
-## Grok Bot VMs (no systemd, no sshd)
+- **Read files** with the MCP tools `box_list` / `box_read_file` or the CLI `grokbot box ls` / `grokbot box cat`. Read-only.
+- **Everything else** (edit files, run commands): `ssh box@grokbot-box` directly, or ask the bot.
 
-A desktop Grok Bot's VM is a container. PID 1 is the Grok Bot pod daemon, so there is no systemd, no cron and no sshd. Install Tailscale in userspace as `box` and use Tailscale SSH instead of an SSH server. Ask a bot to run these (it shows Allow/Deny cards):
+Both go over SSH from the Mac. The gateway never writes files or runs commands on the box.
+
+## Set up the box (one time)
+
+A desktop Grok Bot's VM is a container: no root, no systemd, no cron, no sshd. [`scripts/box-tailscale-setup.sh`](../scripts/box-tailscale-setup.sh) installs Tailscale in the box user's home, turns on Tailscale SSH (so no sshd and no keys), and adds a restart hook. Run it **on the box**. The easy way is to ask the bot, which shows Allow/Deny cards before it runs anything:
+
+```fish
+grokbot ask Chief --timeout 300 "Please download https://raw.githubusercontent.com/robzilla1738/grokbot-gateway/main/scripts/box-tailscale-setup.sh to /tmp, read it, then run it with sh and send me the login URL it prints."
+```
+
+Then:
+
+1. Open the login URL it prints and approve the device on your tailnet.
+2. If an old offline `grokbot-box` is still listed in the [Tailscale admin console](https://login.tailscale.com/admin/machines), remove it first. Otherwise the new one becomes `grokbot-box-1`.
+3. From the Mac: `grokbot box ls` and `ssh box@grokbot-box`.
+
+Use another hostname with `GROKBOT_BOX_HOST=<name> sh box-tailscale-setup.sh` on the box, and set `GROKBOT_BOX_HOST` (or `boxHost` in `config.json`) on the Mac to match. The box user defaults to `box` (`GROKBOT_BOX_USER` / `boxUser`).
+
+The script is safe to re-run. It installs into `~/.local/tailscale`, keeps state in `~/.local/share/tailscale`, and adds `~/.local/bin/grokbot-tailscale-ensure`, which the top of `~/.bashrc` calls on every shell to restart `tailscaled` if it is not running. Login state survives restarts, so the box rejoins without another approval.
+
+### If the box shows offline
+
+Grok Bot VMs can pause while the bot is idle, and the userspace daemon sometimes loses its link to Tailscale's coordination server afterward. Message the bot (that wakes the VM) and ask it to run:
 
 ```sh
-mkdir -p ~/.local/tailscale ~/.local/share/tailscale
-# Tarball name for this arch: curl -fsSL 'https://pkgs.tailscale.com/stable/?mode=json' (Tarballs field)
-curl -fsSL https://pkgs.tailscale.com/stable/<tarball> | tar xz -C ~/.local/tailscale --strip-components=1
-nohup ~/.local/tailscale/tailscaled --tun=userspace-networking \
-  --statedir=$HOME/.local/share/tailscale \
-  --socket=$HOME/.local/share/tailscale/tailscaled.sock \
-  > ~/.local/share/tailscale/tailscaled.log 2>&1 &
-~/.local/tailscale/tailscale --socket=$HOME/.local/share/tailscale/tailscaled.sock up --ssh --hostname=grokbot-box
+~/.local/bin/grokbot-tailscale-ensure --restart
 ```
 
-Open the printed login URL and approve the device. If an old offline `grokbot-box` is still on the tailnet, remove it first or the new one becomes `grokbot-box-1`.
+### Tailscale SSH check mode
 
-Nothing restarts `tailscaled` after the VM restarts. Add a small `~/.local/bin/grokbot-tailscale-ensure` that starts `tailscaled` (same flags) when `pgrep -u "$(id -u)" -x tailscaled` finds nothing, and call it from the top of `~/.bashrc`. Login state lives in `~/.local/share/tailscale`, so it rejoins without another login.
-
-Then connect from any tailnet device with no key setup:
-
-```fish
-ssh box@grokbot-box
-```
-
-The default tailnet policy uses Tailscale SSH `check` mode, which asks for a browser login every 12 hours or so. Switch the `ssh` rule to `"action": "accept"` if agents need to connect without that check.
-
-## One-time on a device that can already log into the box (sshd boxes)
-
-```fish
-./scripts/box-ssh-setup.sh
-```
-
-That writes `~/.config/grokbot-gateway/ssh/local_ed25519` and prints the `~/.ssh/config` snippet.
-
-## Per outside agent
-
-On the agent's machine (after Tailscale is up):
-
-```fish
-./scripts/box-ssh-add-agent.sh claude-code
-```
-
-That:
-
-1. Mints `~/.config/grokbot-gateway/ssh/claude-code_ed25519`
-2. Appends the public key to `box@grokbot-box:~/.ssh/authorized_keys`
-3. Prints a Tailscale ACL snippet that only allows `tag:outside-agent` → `tag:grokbot-box:22`
-
-Copy the private key onto the agent device only. Do not put it in this repo.
-
-Override user/host with `GROKBOT_BOX_USER` and `GROKBOT_BOX_HOST`.
+The default tailnet policy uses Tailscale SSH `check` mode, which asks for a browser login every 12 hours or so. When that happens, `box_list` / `box_read_file` return an error with the login URL; open it and retry. For unattended agents, change the `ssh` rule for the box to `"action": "accept"` (see the ACL below).
 
 ## Tailscale ACL (example)
 
@@ -85,15 +67,40 @@ Merge; do not replace an existing policy blindly. If the file still has the defa
 
 Tag the box `tag:grokbot-box` and the agent device `tag:outside-agent`. Approve both in the admin console if the tailnet requires it.
 
-## How an agent should work
+## Boxes with a regular sshd
 
-- Chat, setup, and "please do X with approval" → `grokbot` CLI or MCP (`ask_bot` / `send_to_bot`).
-- Files, processes, and packages **on the box** → `ssh grokbot-box`.
-- Do not expose the box's own gateway port (`1340`) on the public internet. SSH (or a Tailscale serve on that host) is the path.
+If your box runs its own SSH server instead of Tailscale SSH, give each outside agent its own key.
 
-## Revoke
+One time, on a device that can already log into the box:
+
+```fish
+./scripts/box-ssh-setup.sh
+```
+
+That writes `~/.config/grokbot-gateway/ssh/local_ed25519` and prints the `~/.ssh/config` snippet.
+
+Per outside agent, on the agent's machine (after Tailscale is up):
+
+```fish
+./scripts/box-ssh-add-agent.sh claude-code
+```
+
+That mints `~/.config/grokbot-gateway/ssh/claude-code_ed25519`, appends the public key to `box@grokbot-box:~/.ssh/authorized_keys`, and prints a Tailscale ACL snippet that only allows `tag:outside-agent` → `tag:grokbot-box:22`. Copy the private key onto the agent device only. Do not put it in this repo.
+
+Revoke:
 
 ```fish
 ssh box@grokbot-box "{ grep -v ' grokbot-gateway-claude-code\$' ~/.ssh/authorized_keys || true; } > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
-grokbot token revoke claude-code   # if you also issued an HTTP MCP token
 ```
+
+## How an agent should work
+
+- Chat, setup, and "please do X with approval" → `grokbot` CLI or MCP (`ask_bot` / `send_to_bot`).
+- Look at files on the box → `box_list` / `box_read_file` (or `grokbot box ls` / `cat`).
+- Change files, run processes, install packages **on the box** → `ssh box@grokbot-box`, or ask the bot.
+- Do not expose the box's own gateway port (`1340`) on the public internet. SSH (or a Tailscale serve on that host) is the path.
+
+## Remove access
+
+- Tailscale SSH: remove the box from the tailnet in the admin console, or tighten the `ssh` rule.
+- HTTP MCP: `grokbot token revoke <name>` (box tools need the `box:read` scope).

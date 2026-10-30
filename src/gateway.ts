@@ -1,10 +1,11 @@
+import { boxList, boxReadFile } from "./box.js";
 import { GrokBotClient } from "./client/index.js";
 import { loadConfig } from "./config.js";
 import { gatewayStatus } from "./doctor.js";
 import { toolByName } from "./mcp/tools.js";
 import { audit } from "./security/audit.js";
 import { assertAllowedAction } from "./security/guard.js";
-import { withUntrustedNotice } from "./security/injection.js";
+import { UNTRUSTED_FILE_NOTICE, withUntrustedNotice } from "./security/injection.js";
 import { assertSendRateLimit, DEFAULT_SEND_PER_MINUTE } from "./security/rate-limit.js";
 import { assertBotAllowed, assertScope } from "./security/tokens.js";
 import type { Actor, ChatEntry } from "./types.js";
@@ -153,6 +154,19 @@ export async function dispatchTool(
         const status = await gatewayStatus();
         audit(actor, name, { ok: status.ok });
         return jsonResult(status);
+      }
+      case "box_list": {
+        assertScope(actor, "box:read");
+        const listing = await boxList(typeof parsed.path === "string" ? parsed.path : undefined);
+        audit(actor, name, { ok: true, extra: { path: listing.path, count: listing.entries.length } });
+        return jsonResult({ ok: true, ...listing });
+      }
+      case "box_read_file": {
+        assertScope(actor, "box:read");
+        const maxBytes = typeof parsed.maxBytes === "number" ? parsed.maxBytes : undefined;
+        const file = await boxReadFile(String(parsed.path ?? ""), maxBytes);
+        audit(actor, name, { ok: true, extra: { path: file.path, size: file.size } });
+        return jsonResult(withUntrustedNotice({ ok: true, ...file }, UNTRUSTED_FILE_NOTICE));
       }
       default:
         return { content: [{ type: "text", text: `Unknown tool ${name}` }], isError: true };

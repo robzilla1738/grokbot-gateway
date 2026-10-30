@@ -13,6 +13,7 @@ export const DEFAULT_CONFIG: GatewayConfig = {
   bind: "127.0.0.1",
   httpPort: 14789,
   boxHost: "grokbot-box",
+  boxUser: "box",
   clientVersion: "0.71.2",
   sendPerMinute: DEFAULT_SEND_PER_MINUTE
 };
@@ -35,6 +36,7 @@ export function loadConfig(): GatewayConfig {
   if (process.env.GROKBOT_BIND) defaults.bind = process.env.GROKBOT_BIND;
   if (process.env.GROKBOT_HTTP_PORT) defaults.httpPort = Number(process.env.GROKBOT_HTTP_PORT);
   if (process.env.GROKBOT_BOX_HOST) defaults.boxHost = process.env.GROKBOT_BOX_HOST;
+  if (process.env.GROKBOT_BOX_USER) defaults.boxUser = process.env.GROKBOT_BOX_USER;
   if (process.env.GROKBOT_CLIENT_VERSION) defaults.clientVersion = process.env.GROKBOT_CLIENT_VERSION;
   if (process.env.GROKBOT_MOCK === "1") defaults.transport = "mock";
   if (!TRANSPORT_NAMES.includes(defaults.transport)) {

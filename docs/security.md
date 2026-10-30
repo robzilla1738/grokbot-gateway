@@ -16,11 +16,15 @@ Those actions, if they happen at all, go through a Grok Bot chat. The bot alread
 
 Talking *to* a bot is allowed. Asking a bot "email X" is allowed. The gateway does not inspect chat text to guess intent.
 
+## Box file reads
+
+`box_list` / `box_read_file` (and `grokbot box ls` / `cat`) run `ssh box@<boxHost>` from the Mac with `BatchMode=yes`, a 10s connect timeout, and a 30s overall timeout. The remote command is a fixed script; the requested path is sent on stdin, so it never reaches a shell parser. Paths with newlines or null bytes are refused. Reads are capped at 1 MiB, binary files come back as `binary: true` with no text, and file text carries an untrusted notice. There is no write, delete, or exec tool. HTTP tokens need the `box:read` scope, which read-only tokens do not get. The audit log records the path and size, never file contents.
+
 ## Tokens
 
 - Format: `gbgt_` + 32 random bytes, base64url.
 - Stored at `~/.config/grokbot-gateway/tokens.json` (mode `0600`) as SHA-256 hashes. The secret is printed once at create time.
-- Scopes: `bots:list`, `bots:read`, `bots:send`, `status`, `tokens`. New tokens default to **read-only** (no `bots:send`).
+- Scopes: `bots:list`, `bots:read`, `bots:send`, `status`, `tokens`, `box:read`. New tokens default to **read-only** (no `bots:send`, no `box:read`).
 - Expiry: default **30 days**. Pass `--expires 7d` or `--expires never`.
 - Per-bot allowlist: `--bot Chief` (repeatable).
 - Compare: SHA-256 at rest, `crypto.timingSafeEqual` on the hex hashes.
@@ -75,6 +79,8 @@ It then calls `https://api2.cursor.sh/aiserver.v1.GrokBotService/*` as the deskt
 | T11 | Hostile MCP args | Zod validation, 32 KiB cap, no null bytes |
 | T12 | World-readable token file | `0700` home, `0600` files; `grokbot doctor` flags bad modes |
 | T13 | `--no-token` on a tailnet address | Refused unless bind is loopback |
+| T14 | Path injection through `box_*` tools | Fixed remote script, path on stdin, no newlines or null bytes |
+| T15 | Prompt injection via box files | Untrusted notice on `box_read_file`; read-only tools; `box:read` scope off by default |
 
 ## What needs a live Mac
 
@@ -83,4 +89,4 @@ CI uses the mock bridge. Live checks that need a signed-in Mac:
 - Keychain decrypt of `sand-secrets.json`
 - `ListGrokBotAgents` / `SendGrokBotUserMessage` / `ListGrokBotTranscriptEntries` against `api2.cursor.sh`
 - Optional fallback through GrokBot Notch on `127.0.0.1:4789`
-- `ssh grokbot-box` over the real tailnet
+- `grokbot box ls` and `ssh box@grokbot-box` over the real tailnet

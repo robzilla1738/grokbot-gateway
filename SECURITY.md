@@ -24,11 +24,13 @@ We aim to acknowledge reports within a week.
 | T8 | Oversized or hostile tool args | Zod validation, 32 KiB message cap, no null bytes. |
 | T9 | `--no-token` on a tailnet address | Refused unless bind is loopback. |
 | T10 | Backend RPC change | Doctor + mock tests. Do not patch Grok Bot.app. |
+| T11 | Path injection or hostile files via box tools | Read-only tools, fixed remote script with the path on stdin, 1 MiB cap, untrusted notice, `box:read` scope off by default. |
 
 ## Token scopes
 
 - Default for `grokbot token create`: `bots:list`, `bots:read`, `status` (no send).
 - Add `bots:send` only for agents that must talk.
+- Add `box:read` only for agents that should read files on the box over SSH.
 - `--bot Chief` limits that token to one bot.
 - `--expires 7d` (default `30d`; `never` to disable).
 

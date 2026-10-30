@@ -12,7 +12,7 @@ class Grokbot < Formula
   homepage "https://github.com/robzilla1738/grokbot-gateway"
   license "MIT"
   head "https://github.com/robzilla1738/grokbot-gateway.git", branch: "main"
-  version "0.1.1"
+  version "0.1.2"
 
   depends_on "pnpm" => :build
   depends_on "node@22"
@@ -31,6 +31,6 @@ class Grokbot < Formula
   end
 
   test do
-    assert_match "0.1.1", shell_output("#{bin}/grokbot --version")
+    assert_match "0.1.2", shell_output("#{bin}/grokbot --version")
   end
 end

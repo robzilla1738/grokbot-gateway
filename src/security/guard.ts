@@ -12,6 +12,8 @@ export const ALLOWED_ACTIONS = [
   "wait_for_reply",
   "tail_chat",
   "status",
+  "box_list",
+  "box_read_file",
   "doctor",
   "token_create",
   "token_list",

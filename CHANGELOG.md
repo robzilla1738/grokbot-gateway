@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2
+
+Read files on the box, and a setup script for Grok Bot VMs.
+
+- New MCP tools `box_list` and `box_read_file`, and CLI `grokbot box ls` / `grokbot box cat`. They read the box over SSH (read-only, 1 MiB cap). The path is sent on stdin, never through a remote shell. File contents carry an untrusted notice.
+- New token scope `box:read`. Read-only tokens do not get it; stdio MCP and the local CLI do.
+- `scripts/box-tailscale-setup.sh` runs on a Grok Bot VM (no root, systemd, or sshd). It installs Tailscale in userspace with Tailscale SSH and a restart hook, and prints the login URL. Safe to re-run.
+- `boxUser` config / `GROKBOT_BOX_USER` (default `box`).
+- `docs/box.md`, README, and AGENTS.md lead with Tailscale SSH. The per-agent key scripts are now documented for boxes with a regular sshd.
+
 ## 0.1.1
 
 Fixes found by running against a live Grok Bot session.

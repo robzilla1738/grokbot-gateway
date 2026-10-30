@@ -1,8 +1,8 @@
 export type TransportName = "auto" | "standalone" | "notch" | "mock";
 
-export type TokenScope = "bots:list" | "bots:read" | "bots:send" | "status" | "tokens";
+export type TokenScope = "bots:list" | "bots:read" | "bots:send" | "status" | "tokens" | "box:read";
 
-export const ALL_SCOPES: TokenScope[] = ["bots:list", "bots:read", "bots:send", "status", "tokens"];
+export const ALL_SCOPES: TokenScope[] = ["bots:list", "bots:read", "bots:send", "status", "tokens", "box:read"];
 
 /** Default for newly minted agent tokens: inspect, do not send. */
 export const READONLY_SCOPES: TokenScope[] = ["bots:list", "bots:read", "status"];
@@ -70,6 +70,7 @@ export type GatewayConfig = {
   bind: string;
   httpPort: number;
   boxHost: string;
+  boxUser: string;
   clientVersion: string;
   sendPerMinute: number;
 };

@@ -5,7 +5,7 @@ import { ALLOWED_ACTIONS } from "../src/security/guard.js";
 describe("MCP tool schemas", () => {
   it("exposes the tools an outside agent needs", () => {
     expect(TOOL_DEFINITIONS.map((t) => t.name).sort()).toEqual(
-      ["ask_bot", "list_bots", "read_chat", "send_to_bot", "status", "wait_for_reply"].sort()
+      ["ask_bot", "box_list", "box_read_file", "list_bots", "read_chat", "send_to_bot", "status", "wait_for_reply"].sort()
     );
   });
 

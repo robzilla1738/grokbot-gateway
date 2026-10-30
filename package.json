@@ -1,6 +1,6 @@
 {
   "name": "grokbot-gateway",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI and MCP gateway so outside coding agents can talk to Grok Bot and reach the box over Tailscale",
   "license": "MIT",
   "author": "Robert Courson",
