@@ -6,8 +6,7 @@ This software is unofficial. A gateway token or a local `grokbot mcp` process ca
 
 Report vulnerabilities privately. Do not file a public issue with a working exploit.
 
-- Email: `security@example.com` (replace with a real address before you rely on this)
-- Or use GitHub Security Advisories on this repository
+Use GitHub's private vulnerability reporting: [open a draft advisory](https://github.com/robzilla1738/grokbot-gateway/security/advisories/new).
 
 We aim to acknowledge reports within a week.
 

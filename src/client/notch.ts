@@ -36,6 +36,7 @@ export function createNotchTransport(options: NotchClientOptions = {}): GrokBotT
     const token = readToken(options);
     const url = `${baseUrl}${path}`;
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(30_000),
       ...init,
       headers: {
         Authorization: `Bearer ${token}`,

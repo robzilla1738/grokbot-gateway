@@ -1,3 +1,4 @@
+import dns from "node:dns/promises";
 import fs from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -50,13 +51,12 @@ function permCheck(id: string, file: string, missingOk: boolean): DoctorCheck {
 async function boxReachable(host: string, hasTailscale: boolean): Promise<DoctorCheck> {
   const fix =
     "Join the same Tailscale tailnet as the box, then see docs/box.md. Override the hostname with GROKBOT_BOX_HOST if it is not grokbot-box.";
-  try {
-    const { stdout } = await execFileAsync("getent", ["hosts", host], { timeout: 2000 });
-    if (stdout.trim()) {
-      return { id: "box", ok: true, detail: `${host} resolves: ${stdout.trim().split(/\s+/)[0]}` };
-    }
-  } catch {
-    // try tailscale next
+  const resolved = await Promise.race([
+    dns.lookup(host).then((r) => r.address).catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000).unref())
+  ]);
+  if (resolved) {
+    return { id: "box", ok: true, detail: `${host} resolves: ${resolved}` };
   }
   if (!hasTailscale) {
     return {

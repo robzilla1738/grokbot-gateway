@@ -10,7 +10,7 @@ import {
   resolveBindAddress,
   validateHostAndOrigin
 } from "../security/bind.js";
-import { actorFromToken, extractBearer, localActor, verifyToken } from "../security/tokens.js";
+import { actorFromToken, extractBearer, hasScope, localActor, verifyToken } from "../security/tokens.js";
 import { PRODUCT_NAME, VERSION } from "../version.js";
 import { createTypedMcpServer } from "./server.js";
 
@@ -19,22 +19,40 @@ function sendJson(res: http.ServerResponse, status: number, payload: unknown, ex
   res.end(JSON.stringify(payload));
 }
 
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
 function readBody(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c) => {
-      chunks.push(c as Buffer);
-      if (chunks.reduce((n, b) => n + b.length, 0) > 2 * 1024 * 1024) {
-        reject(new Error("Payload too large"));
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", (c: Buffer) => {
+      if (tooLarge) return;
+      size += c.length;
+      if (size > MAX_BODY_BYTES) {
+        tooLarge = true;
+        reject(new HttpError(413, "Payload too large"));
+        return;
       }
+      chunks.push(c);
     });
     req.on("end", () => {
+      if (tooLarge) return;
       const raw = Buffer.concat(chunks).toString("utf8");
       if (!raw) return resolve(undefined);
       try {
         resolve(JSON.parse(raw));
-      } catch (err) {
-        reject(err);
+      } catch {
+        reject(new HttpError(400, "Invalid JSON body"));
       }
     });
     req.on("error", reject);
@@ -57,11 +75,13 @@ export function assertHttpAuthPolicy(requireToken: boolean, bind: string): void 
 export async function startHttpMcp(opts: HttpMcpOptions = {}): Promise<{ url: string; close: () => Promise<void> }> {
   const cfg = loadConfig();
   const bind = await resolveBindAddress(opts.bind ?? cfg.bind);
-  const port = opts.port ?? cfg.httpPort;
+  // Port 0 picks a free port; the real one is read back after listen() for Host checks.
+  let port = opts.port ?? cfg.httpPort;
   const requireToken = opts.requireToken ?? true;
   assertHttpAuthPolicy(requireToken, bind);
   const client = new GrokBotClient();
-  const transports = new Map<string, StreamableHTTPServerTransport>();
+  // Each MCP session stays bound to the token that opened it, so a leaked session id cannot borrow wider scopes.
+  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; actorId: string }>();
 
   const server = http.createServer(async (req, res) => {
     const security = validateHostAndOrigin(req.headers, bind, port);
@@ -78,13 +98,13 @@ export async function startHttpMcp(opts: HttpMcpOptions = {}): Promise<{ url: st
 
     const url = new URL(req.url || "/", `http://${req.headers.host || bind}`);
 
-    if (req.method === "GET" && (url.pathname === "/health" || url.pathname === "/status")) {
-      const status = await gatewayStatus();
-      sendJson(res, status.ok ? 200 : 503, { ...status, product: PRODUCT_NAME, version: VERSION }, cors);
+    if (req.method === "GET" && url.pathname === "/health") {
+      sendJson(res, 200, { ok: true, product: PRODUCT_NAME, version: VERSION }, cors);
       return;
     }
 
-    if (!url.pathname.startsWith("/mcp")) {
+    const isStatus = req.method === "GET" && url.pathname === "/status";
+    if (!isStatus && !url.pathname.startsWith("/mcp")) {
       sendJson(res, 404, { ok: false, error: "Not found" }, cors);
       return;
     }
@@ -100,30 +120,52 @@ export async function startHttpMcp(opts: HttpMcpOptions = {}): Promise<{ url: st
     const actor = rec ? actorFromToken(rec) : localActor("mcp-http");
 
     try {
+      if (isStatus) {
+        if (!hasScope(actor, "status")) {
+          sendJson(res, 403, { ok: false, error: "Token is missing scope status" }, cors);
+          return;
+        }
+        const status = await gatewayStatus();
+        sendJson(res, status.ok ? 200 : 503, { ...status, product: PRODUCT_NAME }, cors);
+        return;
+      }
+
       const sessionId = req.headers["mcp-session-id"];
       const sid = typeof sessionId === "string" ? sessionId : undefined;
-      let transport = sid ? transports.get(sid) : undefined;
+      let transport: StreamableHTTPServerTransport;
 
-      if (!transport) {
-        transport = new StreamableHTTPServerTransport({
+      if (sid) {
+        const session = sessions.get(sid);
+        if (!session) {
+          // MCP spec: 404 tells the client to start a new session.
+          sendJson(res, 404, { jsonrpc: "2.0", error: { code: -32001, message: "Session not found" }, id: null }, cors);
+          return;
+        }
+        if (session.actorId !== actor.id) {
+          sendJson(res, 403, { ok: false, error: "Session belongs to a different token" }, cors);
+          return;
+        }
+        transport = session.transport;
+      } else {
+        const fresh = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (id) => {
-            transports.set(id, transport!);
+            sessions.set(id, { transport: fresh, actorId: actor.id });
           }
         });
-        transport.onclose = () => {
-          const id = transport?.sessionId;
-          if (id) transports.delete(id);
+        fresh.onclose = () => {
+          if (fresh.sessionId) sessions.delete(fresh.sessionId);
         };
-        const mcp = createTypedMcpServer({ client, actor });
-        await mcp.connect(transport);
+        await createTypedMcpServer({ client, actor }).connect(fresh);
+        transport = fresh;
       }
 
       const body = req.method === "POST" ? await readBody(req) : undefined;
       await transport.handleRequest(req, res, body);
     } catch (err) {
       if (!res.headersSent) {
-        sendJson(res, 500, { ok: false, error: err instanceof Error ? err.message : "error" }, cors);
+        const status = err instanceof HttpError ? err.status : 500;
+        sendJson(res, status, { ok: false, error: err instanceof Error ? err.message : "error" }, cors);
       }
     }
   });
@@ -132,6 +174,8 @@ export async function startHttpMcp(opts: HttpMcpOptions = {}): Promise<{ url: st
     server.listen(port, bind, () => resolve());
     server.on("error", reject);
   });
+  const address = server.address();
+  if (address && typeof address === "object") port = address.port;
 
   const url = `http://${bind}:${port}`;
   console.error(`[${PRODUCT_NAME}] HTTP MCP on ${url}/mcp  health ${url}/health`);
@@ -140,6 +184,7 @@ export async function startHttpMcp(opts: HttpMcpOptions = {}): Promise<{ url: st
     close: () =>
       new Promise((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
+        server.closeAllConnections();
       })
   };
 }

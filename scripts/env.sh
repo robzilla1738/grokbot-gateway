@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # bash / zsh env for grokbot-gateway.
 #   source scripts/env.sh
 # Does not print or export secrets.

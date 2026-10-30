@@ -69,4 +69,6 @@ grokbot mcp --http --bind 127.0.0.1 --port 14789
 
 Point a remote agent at `http://127.0.0.1:14789/mcp` through an SSH tunnel, or `--bind tailscale` and allow only that agent in the ACL. Send `Authorization: Bearer gbgt_...`.
 
-Health: `curl -sS http://127.0.0.1:14789/health`.
+Liveness (no token): `curl -sS http://127.0.0.1:14789/health`. Full status needs a token with the `status` scope: `curl -sS -H "Authorization: Bearer $GROKBOT_TOKEN" http://127.0.0.1:14789/status`.
+
+An MCP session is bound to the token that opened it. Requests with an unknown `Mcp-Session-Id` get `404` so the client starts a new session.

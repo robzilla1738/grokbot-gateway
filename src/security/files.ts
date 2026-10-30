@@ -1,10 +1,11 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { ensureDir } from "../paths.js";
 
 export function writeSecureFile(file: string, data: string): void {
   ensureDir(path.dirname(file), 0o700);
-  const tmp = `${file}.tmp`;
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
   fs.writeFileSync(tmp, data, { mode: 0o600, encoding: "utf8" });
   fs.renameSync(tmp, file);
   try {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createToken,
+  extractBearer,
   hashToken,
   hashesMatch,
   listTokens,
@@ -51,6 +52,22 @@ describe("tokens", () => {
     expect(hashesMatch(a, a)).toBe(true);
     expect(hashesMatch(a, hashToken("gbgt_bbb"))).toBe(false);
     expect(hashesMatch("abc", "ab")).toBe(false);
+  });
+
+  it("refuses a second active token with the same name and revokes the active one by name", () => {
+    const first = createToken("agent");
+    expect(() => createToken("agent")).toThrow(/already exists/);
+    revokeToken("agent");
+    const second = createToken("agent");
+    expect(revokeToken("agent").id).toBe(second.id);
+    expect(verifyToken(first.token)).toBeNull();
+  });
+
+  it("accepts any casing of the Bearer scheme", () => {
+    expect(extractBearer("Bearer gbgt_x")).toBe("gbgt_x");
+    expect(extractBearer("bearer  gbgt_x")).toBe("gbgt_x");
+    expect(extractBearer("gbgt_x")).toBe("gbgt_x");
+    expect(extractBearer(undefined)).toBeNull();
   });
 
   it("parses scopes and rejects unknown ones", () => {

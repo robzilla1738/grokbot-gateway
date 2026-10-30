@@ -67,6 +67,6 @@ Tag the box `tag:grokbot-box` and the agent device `tag:outside-agent`. Approve 
 ## Revoke
 
 ```fish
-ssh box@grokbot-box "grep -v grokbot-gateway-claude-code ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp; mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
+ssh box@grokbot-box "{ grep -v ' grokbot-gateway-claude-code\$' ~/.ssh/authorized_keys || true; } > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
 grokbot token revoke claude-code   # if you also issued an HTTP MCP token
 ```

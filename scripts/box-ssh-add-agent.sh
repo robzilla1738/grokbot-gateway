@@ -32,8 +32,9 @@ fi
 
 PUB="$(cat "$KEY.pub")"
 echo "Installing public key on ${BOX_USER}@${BOX_HOST}..."
-# Restrict the key to that comment so it is easy to revoke later.
-ssh "${BOX_USER}@${BOX_HOST}" "umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -F '$COMMENT' ~/.ssh/authorized_keys >/dev/null 2>&1 || echo '$PUB' >> ~/.ssh/authorized_keys"
+# Match the whole key line: a substring check on the comment would treat
+# "claude" as already installed when "claude-code" is.
+ssh "${BOX_USER}@${BOX_HOST}" "umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -qxF '$PUB' ~/.ssh/authorized_keys || echo '$PUB' >> ~/.ssh/authorized_keys"
 
 cat <<EOF
 
@@ -44,7 +45,7 @@ SSH:
   ssh -i $KEY -o IdentitiesOnly=yes ${BOX_USER}@${BOX_HOST}
 
 Revoke on the box:
-  ssh ${BOX_USER}@${BOX_HOST} "grep -v '$COMMENT' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
+  ssh ${BOX_USER}@${BOX_HOST} "{ grep -vxF '$PUB' ~/.ssh/authorized_keys || true; } > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
 
 Tailscale ACL snippet (merge into the tailnet policy). Replace the src tag
 with the agent's device tag:

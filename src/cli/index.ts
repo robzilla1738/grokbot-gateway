@@ -24,6 +24,20 @@ function jsonFlag(cmd: Command): boolean {
   return false;
 }
 
+function positiveNumber(raw: unknown, flag: string, opts: { integer?: boolean; max?: number } = {}): number {
+  const n = Number(raw);
+  const valid = Number.isFinite(n) && n > 0 && (!opts.integer || Number.isInteger(n)) && (opts.max == null || n <= opts.max);
+  if (!valid) {
+    const kind = opts.integer ? "a positive integer" : "a positive number";
+    throw new Error(`${flag} must be ${kind}${opts.max != null ? ` up to ${opts.max}` : ""}, got "${String(raw)}"`);
+  }
+  return n;
+}
+
+function portNumber(raw: unknown, flag = "--port"): number {
+  return positiveNumber(raw, flag, { integer: true, max: 65_535 });
+}
+
 function readMessage(raw: string[], file?: string): string {
   if (file) {
     if (file === "-") return fs.readFileSync(0, "utf8");
@@ -135,7 +149,7 @@ A gateway token or stdio MCP process can message your bots as you.`
         assertAllowedAction("ask_bot");
         const text = readMessage(message, this.opts().file);
         if (!text) throw new Error("Message is empty");
-        const timeoutMs = Number(this.opts().timeout) * 1000;
+        const timeoutMs = positiveNumber(this.opts().timeout, "--timeout") * 1000;
         const client = new GrokBotClient();
         let lastLen = 0;
         const result = await client.ask(bot, text, {
@@ -185,7 +199,7 @@ A gateway token or stdio MCP process can message your bots as you.`
         assertAllowedAction("read_chat");
         const client = new GrokBotClient();
         const result = await client.read(bot, {
-          limit: Number(this.opts().limit),
+          limit: positiveNumber(this.opts().limit, "--limit", { integer: true }),
           since: this.opts().since
         });
         audit(localActor(), "read_chat", { ok: true, botId: result.bot.id, botName: result.bot.name });
@@ -206,6 +220,7 @@ A gateway token or stdio MCP process can message your bots as you.`
       const json = jsonFlag(this);
       try {
         assertAllowedAction("tail_chat");
+        const intervalMs = positiveNumber(this.opts().interval, "--interval") * 1000;
         const client = new GrokBotClient();
         const first = await client.read(bot, { limit: 50 });
         const seen = new Set(first.entries.map((e) => e.id));
@@ -214,12 +229,27 @@ A gateway token or stdio MCP process can message your bots as you.`
         else {
           for (const e of first.entries.slice(-5)) printJson({ type: "entry", bot: first.bot.name, ...e });
         }
-        const intervalMs = Number(this.opts().interval) * 1000;
-        const timer = setInterval(async () => {
+        let stopped = false;
+        let wake: (() => void) | undefined;
+        const stop = () => {
+          stopped = true;
+          wake?.();
+        };
+        process.once("SIGINT", stop);
+        process.once("SIGTERM", stop);
+        // Poll sequentially so a slow backend call never overlaps the next one and prints duplicates.
+        while (!stopped) {
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, intervalMs);
+            wake = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          });
+          if (stopped) break;
           try {
-            const next = await client.read(bot, { limit: 50 });
-            const fresh = next.entries.filter((e) => !seen.has(e.id));
-            for (const e of fresh) {
+            const next = await client.read(first.bot, { limit: 50 });
+            for (const e of next.entries.filter((entry) => !seen.has(entry.id))) {
               seen.add(e.id);
               if (json) printJson({ type: "entry", bot: next.bot.name, ...e });
               else printHuman(["", `[${e.role}] ${e.text}`]);
@@ -229,15 +259,7 @@ A gateway token or stdio MCP process can message your bots as you.`
             if (json) printJson({ type: "error", error: message });
             else process.stderr.write(`tail error: ${message}\n`);
           }
-        }, intervalMs);
-        await new Promise<void>((resolve) => {
-          const stop = () => {
-            clearInterval(timer);
-            resolve();
-          };
-          process.on("SIGINT", stop);
-          process.on("SIGTERM", stop);
-        });
+        }
       } catch (err) {
         fail(err, json);
       }
@@ -449,7 +471,7 @@ Never bind 0.0.0.0. HTTP on Tailscale requires a token.`
           }
           await startHttpMcp({
             bind,
-            port: this.opts().port ? Number(this.opts().port) : undefined,
+            port: this.opts().port ? portNumber(this.opts().port) : undefined,
             requireToken: this.opts().token !== false
           });
         } else {
@@ -480,7 +502,7 @@ Token comes from GROKBOT_MOCK_TOKEN (default mock-token). Do not pass secrets on
         const token = process.env.GROKBOT_MOCK_TOKEN || "mock-token";
         const bridge = await startMockBridge({
           host: bind,
-          port: Number(this.opts().port),
+          port: portNumber(this.opts().port),
           token
         });
         const info = {

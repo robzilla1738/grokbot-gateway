@@ -26,15 +26,20 @@ function parseJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+let safeStorageKey: Buffer | null = null;
+
 function getSafeStorageKey(): Buffer | null {
+  if (safeStorageKey) return safeStorageKey;
   if (process.platform !== "darwin") return null;
   try {
+    // The Keychain lookup routinely takes ~3s and may wait on an access prompt the first time.
     const pw = execFileSync("/usr/bin/security", ["find-generic-password", "-w", "-s", "Grok Bot Safe Storage"], {
       encoding: "utf8",
-      timeout: 3000,
+      timeout: 30_000,
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
-    return crypto.pbkdf2Sync(pw, "saltysalt", 1003, 16, "sha1");
+    safeStorageKey = crypto.pbkdf2Sync(pw, "saltysalt", 1003, 16, "sha1");
+    return safeStorageKey;
   } catch {
     return null;
   }
@@ -93,7 +98,20 @@ function readActiveScopeFromDisk(): string | null {
   return null;
 }
 
-export async function readAuthContext(desiredScope?: string | null): Promise<AuthContext> {
+const AUTH_CACHE_MS = 30_000;
+const authCache = new Map<string, { at: number; value: Promise<AuthContext> }>();
+
+/** Cached briefly: callers poll transcripts every second, and each uncached read hits SQLite and the Keychain. */
+export function readAuthContext(desiredScope?: string | null): Promise<AuthContext> {
+  const key = desiredScope ?? "";
+  const hit = authCache.get(key);
+  if (hit && Date.now() - hit.at < AUTH_CACHE_MS) return hit.value;
+  const value = loadAuthContext(desiredScope);
+  authCache.set(key, { at: Date.now(), value });
+  return value;
+}
+
+async function loadAuthContext(desiredScope?: string | null): Promise<AuthContext> {
   const scopeHint = desiredScope || readActiveScopeFromDisk();
   let accessToken = process.env.CURSOR_ACCESS_TOKEN || process.env.GROKBOT_ACCESS_TOKEN || null;
   let machineId = process.env.CURSOR_MACHINE_ID || process.env.GROKBOT_MACHINE_ID || null;

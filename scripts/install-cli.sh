@@ -53,5 +53,5 @@ echo "  grokbot doctor"
 echo
 echo "bash/zsh:  source scripts/env.sh"
 echo "fish:      source scripts/grokbot.fish"
-echo "Homebrew:  brew install node@22 && ./scripts/install-cli.sh"
-echo "           (optional later) brew install --HEAD Formula/grokbot.rb"
+echo "Homebrew:  brew tap robzilla1738/grokbot-gateway https://github.com/robzilla1738/grokbot-gateway"
+echo "           brew install --HEAD robzilla1738/grokbot-gateway/grokbot"

@@ -36,6 +36,9 @@ Talking *to* a bot is allowed. Asking a bot "email X" is allowed. The gateway do
 - Binding `0.0.0.0` / `::` is refused.
 - Every HTTP request is checked for `Host` (must be the bind host or loopback) and `Origin` (if present, must be the matching loopback/bind URL). No wildcard CORS.
 - This is the same DNS-rebinding defense grokbot-notch added in its hardening PR.
+- An HTTP MCP session is bound to the token that opened it. Another token cannot reuse its `Mcp-Session-Id`.
+- `GET /health` returns only product and version. `GET /status` needs a token with the `status` scope.
+- Request bodies are capped at 2 MiB.
 
 ## Audit log
 

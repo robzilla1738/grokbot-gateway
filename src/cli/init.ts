@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import readline from "node:readline/promises";
-import { loadConfig, saveConfig } from "../config.js";
+import { loadConfig, saveConfig, TRANSPORT_NAMES } from "../config.js";
 import { runDoctor } from "../doctor.js";
 import { grokBotAppPath, notchAuthTokenPath, ensureGatewayHome } from "../paths.js";
 import { sessionPresent } from "../client/session.js";
@@ -50,6 +50,9 @@ export async function runInit(opts: { yes?: boolean }): Promise<InitResult> {
       current.transport,
       true
     )) as TransportName;
+    if (!TRANSPORT_NAMES.includes(transport)) {
+      throw new Error(`Invalid transport "${transport}". Use one of: ${TRANSPORT_NAMES.join(", ")}.`);
+    }
     boxHost = await prompt("Box hostname (Tailscale MagicDNS)", current.boxHost, true);
   }
 

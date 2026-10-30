@@ -138,11 +138,17 @@ export function isExpired(rec: StoredToken, now = Date.now()): boolean {
 export function createToken(nameOrInput: string | TokenCreateInput, scopes?: TokenScope[]): CreatedToken {
   const input: TokenCreateInput =
     typeof nameOrInput === "string" ? { name: nameOrInput, scopes } : nameOrInput;
+  const name = input.name.trim();
+  if (!name) throw new Error("Token name is required");
+  const file = loadTokenFile();
+  if (file.tokens.some((t) => t.name === name && !t.revokedAt && !isExpired(t))) {
+    throw new Error(`An active token named "${name}" already exists. Revoke it first or pick another name.`);
+  }
   const token = TOKEN_PREFIX + crypto.randomBytes(32).toString("base64url");
   const expiresAt = resolveExpiry(input.expiresAt);
   const record: StoredToken = {
     id: crypto.randomUUID(),
-    name: input.name,
+    name,
     hash: hashToken(token),
     prefix: token.slice(0, 10),
     scopes: input.scopes && input.scopes.length ? input.scopes : [...READONLY_SCOPES],
@@ -153,7 +159,6 @@ export function createToken(nameOrInput: string | TokenCreateInput, scopes?: Tok
     lastUsedAt: null,
     revokedAt: null
   };
-  const file = loadTokenFile();
   file.tokens.push(record);
   saveTokenFile(file);
   return { ...record, token };
@@ -165,9 +170,10 @@ export function listTokens(): StoredToken[] {
 
 export function revokeToken(idOrPrefix: string): StoredToken {
   const file = loadTokenFile();
-  const rec = file.tokens.find(
+  const matches = file.tokens.filter(
     (t) => t.id === idOrPrefix || t.prefix === idOrPrefix || t.name === idOrPrefix
   );
+  const rec = matches.find((t) => !t.revokedAt) ?? matches[0];
   if (!rec) throw new Error(`No token matching "${idOrPrefix}"`);
   if (rec.revokedAt) throw new Error(`Token ${rec.id} is already revoked`);
   rec.revokedAt = new Date().toISOString();
@@ -186,8 +192,12 @@ export function verifyToken(presented: string | null | undefined, now = Date.now
   if (!matched) return null;
   if (matched.revokedAt) return null;
   if (isExpired(matched, now)) return null;
-  matched.lastUsedAt = new Date().toISOString();
-  saveTokenFile(file);
+  // Every HTTP request verifies the token; only rewrite the file once a minute.
+  const last = matched.lastUsedAt ? Date.parse(matched.lastUsedAt) : 0;
+  if (!Number.isFinite(last) || now - last > 60_000) {
+    matched.lastUsedAt = new Date(now).toISOString();
+    saveTokenFile(file);
+  }
   return matched;
 }
 
@@ -229,6 +239,6 @@ export function assertBotAllowed(actor: Actor, botId: string, botName: string): 
 export function extractBearer(authorization: string | string[] | undefined): string | null {
   const raw = Array.isArray(authorization) ? authorization[0] : authorization;
   if (!raw) return null;
-  if (raw.startsWith("Bearer ")) return raw.slice("Bearer ".length).trim();
-  return raw.trim();
+  const bearer = /^Bearer\s+(.+)$/i.exec(raw.trim());
+  return bearer?.[1] ? bearer[1].trim() : raw.trim();
 }

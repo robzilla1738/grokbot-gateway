@@ -4,6 +4,8 @@ import { writeSecureFile } from "./security/files.js";
 import { DEFAULT_SEND_PER_MINUTE } from "./security/rate-limit.js";
 import type { GatewayConfig, TransportName } from "./types.js";
 
+export const TRANSPORT_NAMES: TransportName[] = ["auto", "standalone", "notch", "mock"];
+
 export const DEFAULT_CONFIG: GatewayConfig = {
   transport: "auto",
   backendUrl: "https://api2.cursor.sh",
@@ -35,6 +37,9 @@ export function loadConfig(): GatewayConfig {
   if (process.env.GROKBOT_BOX_HOST) defaults.boxHost = process.env.GROKBOT_BOX_HOST;
   if (process.env.GROKBOT_CLIENT_VERSION) defaults.clientVersion = process.env.GROKBOT_CLIENT_VERSION;
   if (process.env.GROKBOT_MOCK === "1") defaults.transport = "mock";
+  if (!TRANSPORT_NAMES.includes(defaults.transport)) {
+    throw new Error(`Invalid transport "${defaults.transport}". Use one of: ${TRANSPORT_NAMES.join(", ")}.`);
+  }
   if (process.env.GROKBOT_SEND_PER_MINUTE) {
     defaults.sendPerMinute = Number(process.env.GROKBOT_SEND_PER_MINUTE) || defaults.sendPerMinute;
   }

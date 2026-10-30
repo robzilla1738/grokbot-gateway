@@ -4,6 +4,8 @@ import { loadConfig } from "../config.js";
 import { createCursorChecksum } from "./checksum.js";
 import type { AuthContext } from "./session.js";
 
+const RPC_TIMEOUT_MS = 30_000;
+
 export function buildBackendHeaders(auth: AuthContext, clientVersion?: string): Record<string, string> {
   const version = clientVersion || loadConfig().clientVersion;
   const headers: Record<string, string> = {
@@ -39,7 +41,8 @@ export async function callGrokBotRpc<T = Record<string, unknown>>(
   const res = await fetch(url, {
     method: "POST",
     headers: buildBackendHeaders(auth),
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS)
   });
   const text = await res.text();
   let json: Record<string, unknown>;
@@ -68,7 +71,8 @@ export async function resolveRegisteredSandMachineId(auth: AuthContext, backendU
     const res = await fetch(`${base}/aiserver.v1.DashboardService/ListSandMachines`, {
       method: "POST",
       headers: buildBackendHeaders(auth),
-      body: JSON.stringify({})
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(RPC_TIMEOUT_MS)
     });
     if (res.ok) {
       const data = (await res.json()) as { machines?: Array<{ label?: string; connected?: boolean; kind?: string; machineId?: string }> };

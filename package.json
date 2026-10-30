@@ -18,8 +18,8 @@
   },
   "packageManager": "pnpm@10.33.4",
   "bin": {
-    "grokbot": "./dist/bin/grokbot.js",
-    "grokbot-gateway": "./dist/bin/grokbot.js"
+    "grokbot": "dist/bin/grokbot.js",
+    "grokbot-gateway": "dist/bin/grokbot.js"
   },
   "exports": {
     ".": "./dist/index.js",

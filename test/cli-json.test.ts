@@ -88,6 +88,20 @@ describe("CLI --json against mock transport", () => {
     }
   });
 
+  it("rejects a non-numeric --timeout", async () => {
+    const result = await run(["--json", "ask", "Chief", "hello", "--timeout", "soon"]);
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, error: expect.stringMatching(/--timeout/) });
+  });
+
+  it("rejects an unknown transport with a clear error", async () => {
+    delete process.env.GROKBOT_MOCK;
+    process.env.GROKBOT_TRANSPORT = "bogus";
+    const result = await run(["--json", "bots"]);
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, error: expect.stringMatching(/Invalid transport "bogus"/) });
+  });
+
   it("creates a read-only expiring token without putting the secret in the store", async () => {
     const result = await run(["--json", "token", "create", "--name", "ci-agent"]);
     expect(result.code).toBe(0);

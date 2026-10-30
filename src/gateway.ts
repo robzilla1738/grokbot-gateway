@@ -98,7 +98,7 @@ export async function dispatchTool(
         const timeoutMs = typeof parsed.timeoutMs === "number" ? parsed.timeoutMs : undefined;
         const resolved = await client.resolve(bot);
         assertBotAllowed(actor, resolved.id, resolved.name);
-        const result = await client.ask(resolved.name, text, { timeoutMs });
+        const result = await client.ask(resolved, text, { timeoutMs });
         audit(actor, name, {
           ok: true,
           botId: result.bot.id,
@@ -121,7 +121,7 @@ export async function dispatchTool(
         const since = typeof parsed.since === "string" ? parsed.since : undefined;
         const resolved = await client.resolve(bot);
         assertBotAllowed(actor, resolved.id, resolved.name);
-        const result = await client.read(resolved.name, { limit, since });
+        const result = await client.read(resolved, { limit, since });
         audit(actor, name, { ok: true, botId: result.bot.id, botName: result.bot.name });
         return jsonResult(
           withUntrustedNotice({
@@ -138,7 +138,7 @@ export async function dispatchTool(
         const timeoutMs = typeof parsed.timeoutMs === "number" ? parsed.timeoutMs : undefined;
         const resolved = await client.resolve(bot);
         assertBotAllowed(actor, resolved.id, resolved.name);
-        const replies = await client.wait(resolved.name, { since, timeoutMs });
+        const replies = await client.wait(resolved, { since, timeoutMs });
         audit(actor, name, { ok: true, botId: resolved.id, botName: resolved.name });
         return jsonResult(
           withUntrustedNotice({

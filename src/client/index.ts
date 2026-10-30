@@ -75,22 +75,26 @@ export class GrokBotClient {
     return resolveBot(bots, ref);
   }
 
-  async send(ref: string, text: string): Promise<SendResult> {
-    const bot = await this.resolve(ref);
+  private async bot(ref: string | BotRef): Promise<BotRef> {
+    return typeof ref === "string" ? this.resolve(ref) : ref;
+  }
+
+  async send(ref: string | BotRef, text: string): Promise<SendResult> {
+    const bot = await this.bot(ref);
     return this.transport.sendMessage(bot, text);
   }
 
-  async read(ref: string, opts?: { limit?: number; since?: string }) {
-    const bot = await this.resolve(ref);
+  async read(ref: string | BotRef, opts?: { limit?: number; since?: string }) {
+    const bot = await this.bot(ref);
     return this.transport.getTranscript(bot, opts);
   }
 
   async ask(
-    ref: string,
+    ref: string | BotRef,
     text: string,
     opts?: { timeoutMs?: number; pollMs?: number; onUpdate?: (entries: ChatEntry[]) => void }
   ): Promise<{ bot: BotRef; messageId: string; replies: ChatEntry[] }> {
-    const bot = await this.resolve(ref);
+    const bot = await this.bot(ref);
     const sinceIds = await snapshotAssistantIds(this.transport, bot);
     const sent = await this.transport.sendMessage(bot, text);
     const replies = await waitForReply(this.transport, bot, {
@@ -103,10 +107,10 @@ export class GrokBotClient {
   }
 
   async wait(
-    ref: string,
+    ref: string | BotRef,
     opts?: { timeoutMs?: number; since?: string; pollMs?: number }
   ): Promise<ChatEntry[]> {
-    const bot = await this.resolve(ref);
+    const bot = await this.bot(ref);
     const transcript = await this.transport.getTranscript(bot, { limit: 50 });
     const sinceIds = new Set(
       transcript.entries.filter((e) => e.role === "assistant").map((e) => e.id)
