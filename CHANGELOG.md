@@ -9,6 +9,8 @@ Fixes found by running against a live Grok Bot session.
 - `read --limit N` over-fetches from the backend, so tool and status entries no longer crowd out chat messages.
 - When the backend answers, `bots` lists only the bots it knows about. Deleted bots and bots from another account no longer show up and fail on send.
 - When the backend has no transcript for a bot, `read` falls back to the copy cached on disk.
+- Upgrade `zod` to 4.6 for GHSA-mrhx-c7xc-m3w5 (memory exhaustion on oversized input).
+- Drop the `prepare` script. The package ships prebuilt, and npm 12 warned about a blocked install script on every install.
 
 ## 0.1.0
 

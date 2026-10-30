@@ -47,7 +47,6 @@
     "test:watch": "vitest",
     "grokbot": "tsx src/bin/grokbot.ts",
     "mcp": "tsx src/bin/grokbot.ts mcp",
-    "prepare": "tsc",
     "prepack": "tsc && chmod +x dist/bin/grokbot.js"
   },
   "keywords": [
@@ -59,7 +58,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
     "commander": "^14.0.2",
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
