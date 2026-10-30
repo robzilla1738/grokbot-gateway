@@ -25,7 +25,7 @@ Talking *to* a bot is allowed. Asking a bot "email X" is allowed. The gateway do
 - Per-bot allowlist: `--bot Chief` (repeatable).
 - Compare: SHA-256 at rest, `crypto.timingSafeEqual` on the hex hashes.
 - Send rate limit: 20/minute per token (override with `sendPerMinute` / `GROKBOT_SEND_PER_MINUTE`).
-- `grokbot token list` / `grokbot token revoke <id>`.
+- `grokbot token list` / `grokbot token revoke <id|prefix|name>`.
 - HTTP MCP requires `Authorization: Bearer`. `--no-token` is refused unless the bind is loopback. stdio MCP is a local child process of the agent and uses the Mac user's identity.
 - Secrets come from env (`GROKBOT_MOCK_TOKEN`, `GROKBOT_ACCESS_TOKEN`), never from argv.
 
