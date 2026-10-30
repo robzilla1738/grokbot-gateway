@@ -38,6 +38,47 @@ function normalizeAgent(raw: AgentRow, local?: BotRef): BotRef {
   };
 }
 
+const SERVER_TRANSCRIPT_FETCH = 100;
+
+type ServerTranscriptEntry = { body?: string; seq?: number | string; entryKind?: string };
+
+/** Text chat entries in chronological order. The server returns newest first. */
+export function parseServerTranscript(rawEntries: ServerTranscriptEntry[]): ChatEntry[] {
+  const entries: ChatEntry[] = [];
+  for (const raw of rawEntries) {
+    const parsed = parseServerTranscriptEntry(raw);
+    if (!parsed) continue;
+    const seq = Number(raw.seq);
+    const base = {
+      id: String(parsed.id ?? crypto.randomUUID()),
+      seq: Number.isFinite(seq) ? seq : undefined,
+      timestampMs: typeof parsed.timestampMs === "number" ? parsed.timestampMs : null
+    };
+    if (parsed.kind === "send-message") {
+      const message = parsed.message as { type?: string; content?: string; channel?: string } | undefined;
+      if (message?.type === "text") {
+        entries.push({
+          ...base,
+          role: "assistant",
+          text: String(message.content || "").trim(),
+          channel: message.channel ?? null
+        });
+      }
+    } else if (parsed.kind === "message" && typeof parsed.content === "string") {
+      entries.push({
+        ...base,
+        // clientNonce is the messageId sendMessage returned, so since=<messageId> matches this entry.
+        id: String(parsed.clientNonce ?? base.id),
+        role: String(parsed.role || "user"),
+        text: parsed.content.trim(),
+        channel: typeof parsed.channel === "string" ? parsed.channel : null
+      });
+    }
+  }
+  if (entries.every((e) => e.seq !== undefined)) return entries.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+  return entries.reverse();
+}
+
 export function createStandaloneTransport(): GrokBotTransport {
   const cfg = loadConfig();
 
@@ -71,8 +112,9 @@ export function createStandaloneTransport(): GrokBotTransport {
         if (!id) continue;
         byId.set(id, normalizeAgent(agent, localById.get(id)));
       }
-      for (const local of snap.localBots) {
-        if (!byId.has(local.id)) byId.set(local.id, local);
+      // The local roster can hold deleted bots or bots from another signed-in account; trust it only offline.
+      if (!liveConnected) {
+        for (const local of snap.localBots) byId.set(local.id, local);
       }
       if (!auth.accessToken && byId.size === 0) {
         throw new TransportError(
@@ -118,46 +160,24 @@ export function createStandaloneTransport(): GrokBotTransport {
     async getTranscript(bot, opts) {
       const snap = readPersistenceSnapshot();
       const auth = await readAuthContext(snap.activeAccountScope);
-      const entries: ChatEntry[] = [];
+      const local = snap.transcripts.get(bot.id) ?? [];
       if (auth.accessToken) {
         try {
-          const res = await callGrokBotRpc<{
-            entries?: Array<{ body?: string; seq?: number; entryKind?: string }>;
-          }>("ListGrokBotTranscriptEntries", { agentId: bot.id, limit: opts?.limit ?? 30 }, auth, cfg.backendUrl);
-          if (Array.isArray(res.entries)) {
-            for (const raw of res.entries) {
-              const parsed = parseServerTranscriptEntry(raw);
-              if (!parsed) continue;
-              if (parsed.kind === "send-message") {
-                const message = parsed.message as { type?: string; content?: string; channel?: string } | undefined;
-                if (message?.type === "text") {
-                  entries.push({
-                    id: String(parsed.id ?? crypto.randomUUID()),
-                    seq: typeof parsed.seq === "number" ? parsed.seq : undefined,
-                    role: "assistant",
-                    text: String(message.content || "").trim(),
-                    channel: message.channel ?? null,
-                    timestampMs: typeof parsed.timestampMs === "number" ? parsed.timestampMs : null
-                  });
-                }
-              } else if (parsed.kind === "message" && typeof parsed.content === "string") {
-                entries.push({
-                  id: String(parsed.id ?? crypto.randomUUID()),
-                  seq: typeof parsed.seq === "number" ? parsed.seq : undefined,
-                  role: String(parsed.role || "user"),
-                  text: parsed.content.trim(),
-                  channel: typeof parsed.channel === "string" ? parsed.channel : null,
-                  timestampMs: typeof parsed.timestampMs === "number" ? parsed.timestampMs : null
-                });
-              }
-            }
+          // The server limit also counts tool/status entries, so over-fetch and trim after parsing.
+          const res = await callGrokBotRpc<{ entries?: ServerTranscriptEntry[] }>(
+            "ListGrokBotTranscriptEntries",
+            { agentId: bot.id, limit: Math.max(opts?.limit ?? 20, SERVER_TRANSCRIPT_FETCH) },
+            auth,
+            cfg.backendUrl
+          );
+          const entries = parseServerTranscript(res.entries ?? []);
+          if (entries.length > 0 || local.length === 0) {
+            return { ok: true, bot, entries: filterSince(entries, opts?.since, opts?.limit ?? 20) };
           }
-          return { ok: true, bot, entries: filterSince(entries, opts?.since, opts?.limit ?? 20) };
         } catch {
           // local fallback
         }
       }
-      const local = snap.transcripts.get(bot.id) ?? [];
       return { ok: true, bot, entries: filterSince(local, opts?.since, opts?.limit ?? 20) };
     },
     async ping() {

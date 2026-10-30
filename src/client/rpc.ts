@@ -95,7 +95,7 @@ export async function resolveRegisteredSandMachineId(auth: AuthContext, backendU
 
 export function parseServerTranscriptEntry(rawEntry: {
   body?: string;
-  seq?: number;
+  seq?: number | string;
   entryKind?: string;
 }): Record<string, unknown> | null {
   if (!rawEntry?.body) return null;

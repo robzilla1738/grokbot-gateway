@@ -1,5 +1,8 @@
 # grokbot-gateway
 
+[![npm](https://img.shields.io/npm/v/grokbot-gateway)](https://www.npmjs.com/package/grokbot-gateway)
+[![CI](https://github.com/robzilla1738/grokbot-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/robzilla1738/grokbot-gateway/actions/workflows/ci.yml)
+
 Unofficial CLI and MCP server so an **outside** coding agent (Claude Code, Codex, Cursor, and similar) can message **your** Grok Bots, read replies, and SSH to the Linux VM (`grokbot-box` on Tailscale).
 
 This is **not** an official xAI product and **not** a public Grok API client. There is no `XAI_API_KEY`. It uses the already signed-in Desktop Grok Bot session on a Mac.
@@ -13,11 +16,12 @@ Need: **Node.js 22.5+** and Desktop Grok Bot installed and signed in on this Mac
 **1. Install** (pick one; none of these are `curl | sh`):
 
 ```bash
-# From npm, once published:
+# From npm:
 npm install -g grokbot-gateway
 # or
 pnpm add -g grokbot-gateway
-npx grokbot-gateway init
+# or try it without installing:
+npx grokbot-gateway init --yes
 ```
 
 ```bash
@@ -62,6 +66,8 @@ grokbot-notch is a macOS Notch UI. Its Node bridge on `127.0.0.1:4789` reads the
 **Why not only call that Notch bridge?** Notch is a GUI. Its token is per launch and loopback-only. An outside agent that needs Tailscale, scoped tokens, and an audit log cannot depend on the Notch window being up.
 
 **Why not ignore Notch entirely?** If Notch is already running, `GROKBOT_TRANSPORT=notch` is a working fallback.
+
+When the backend answers, `bots` lists only the bots it knows about. The roster cached on disk can include deleted bots or bots from another signed-in account, so the gateway uses it only when the backend is unreachable. Transcripts come back oldest first. The `messageId` that `send` / `send_to_bot` returns matches the user entry in `read`, so `wait_for_reply` with `since: <messageId>` never misses a fast reply.
 
 Default transport is `auto`: standalone when session files exist, else notch if the launch token file exists, else a clear doctor error. `GROKBOT_TRANSPORT=mock` (or `grokbot mock`) is for tests.
 
@@ -129,6 +135,10 @@ Replace `grokbot-box` with your MagicDNS name if it differs (`<host>.<tailnet>.t
 - `~/.config/grokbot-gateway` is `0700`; tokens/config/audit are `0600`
 - The gateway never emails, buys, or deletes. Consequential work goes through the bot's Allow/Deny card
 
+## Changelog
+
+[CHANGELOG.md](CHANGELOG.md)
+
 ## Tests and CI
 
 ```bash
@@ -162,7 +172,9 @@ If `ListGrokBotAgents` starts failing after a Grok Bot update, set `GROKBOT_CLIE
 | `audit.log` | append-only command log (`0600`) |
 | `ssh/` | per-agent keys |
 
-Env overrides: `GROKBOT_TRANSPORT`, `GROKBOT_NOTCH_URL`, `GROKBOT_BIND`, `GROKBOT_HTTP_PORT`, `GROKBOT_BOX_HOST`, `GROKBOT_GATEWAY_HOME`, `GROKBOT_ACCESS_TOKEN` (advanced; prefer the desktop session), `GROKBOT_MOCK_TOKEN` (mock bridge), `SAND_BACKEND_URL`. Do not pass secrets on the command line.
+Env overrides: `GROKBOT_TRANSPORT`, `GROKBOT_NOTCH_URL`, `GROKBOT_NOTCH_AUTH_TOKEN`, `GROKBOT_BIND`, `GROKBOT_HTTP_PORT`, `GROKBOT_BOX_HOST`, `GROKBOT_BOX_USER` (SSH scripts), `GROKBOT_GATEWAY_HOME`, `GROKBOT_SEND_PER_MINUTE`, `GROKBOT_CLIENT_VERSION`, `GROKBOT_ACCESS_TOKEN` (advanced; prefer the desktop session), `GROKBOT_MOCK_TOKEN` (mock bridge), `SAND_BACKEND_URL`. Do not pass secrets on the command line.
+
+The first live call reads the `Grok Bot Safe Storage` Keychain item, which takes a few seconds and may show a macOS access prompt once. The gateway caches the key for the life of the process.
 
 ## License
 
