@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Optional: keep HTTP MCP up on login (loopback only).
+  Copy to ~/Library/LaunchAgents/com.grokbot.gateway.plist after replacing
+  GROKBOT_BIN with `which grokbot`.
+  Then: launchctl load ~/Library/LaunchAgents/com.grokbot.gateway.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.grokbot.gateway</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>GROKBOT_BIN</string>
+    <string>mcp</string>
+    <string>--http</string>
+    <string>--bind</string>
+    <string>127.0.0.1</string>
+    <string>--port</string>
+    <string>14789</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/grokbot-gateway.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/grokbot-gateway.err</string>
+</dict>
+</plist>

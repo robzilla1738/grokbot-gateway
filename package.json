@@ -1,0 +1,72 @@
+{
+  "name": "grokbot-gateway",
+  "version": "0.1.0",
+  "description": "CLI and MCP gateway so outside coding agents can talk to Grok Bot and reach the box over Tailscale",
+  "license": "MIT",
+  "author": "Robert Courson",
+  "homepage": "https://github.com/robzilla1738/grokbot-gateway",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robzilla1738/grokbot-gateway.git"
+  },
+  "bugs": {
+    "url": "https://github.com/robzilla1738/grokbot-gateway/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "bin": {
+    "grokbot": "./dist/bin/grokbot.js",
+    "grokbot-gateway": "./dist/bin/grokbot.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./mcp/tools": "./dist/mcp/tools.js"
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "docs",
+    "examples",
+    "Formula",
+    "launchd",
+    "AGENTS.md",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/bin/grokbot.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test && node scripts/lint-secrets.mjs",
+    "lint:secrets": "node scripts/lint-secrets.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "grokbot": "tsx src/bin/grokbot.ts",
+    "mcp": "tsx src/bin/grokbot.ts mcp",
+    "prepare": "tsc",
+    "prepack": "tsc && chmod +x dist/bin/grokbot.js"
+  },
+  "keywords": [
+    "grok-bot",
+    "mcp",
+    "cli",
+    "tailscale"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "commander": "^14.0.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.9.2",
+    "eslint": "^10.14.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.4"
+  }
+}
